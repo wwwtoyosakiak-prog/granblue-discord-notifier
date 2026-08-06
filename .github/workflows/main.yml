@@ -1,0 +1,51 @@
+name: Granblue Discord Notifier
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+    inputs:
+      test_notification:
+        description: "Discordへテスト通知だけを送る"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: granblue-discord-notifier
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: NEWSを確認してDiscordへ通知
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          KEYWORDS: ${{ vars.KEYWORDS }}
+          TEST_NOTIFICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.test_notification || 'false' }}
+        run: python main.py
+
+      - name: 既読データを保存
+        if: success() && github.event_name != 'workflow_dispatch'
+        run: |
+          if ! git diff --quiet -- data/seen.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/seen.json
+            git commit -m "chore: update seen Granblue NEWS [skip ci]"
+            git push
+          fi
