@@ -1,0 +1,9 @@
+このフォルダには次のGitHub Actionsファイルが入っています。
+
+.github/workflows/notifier.yml
+
+Macでは「.」で始まるフォルダが隠れて見えないことがあります。
+Finderで command + shift + .（ピリオド）を押すと表示できます。
+
+GitHubへは、このフォルダの中身をすべてアップロードしてください。
+詳しい設定方法は README.md を開いて確認してください。

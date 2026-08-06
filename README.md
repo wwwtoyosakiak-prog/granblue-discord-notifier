@@ -1,111 +1,51 @@
-# グランブルーファンタジー Discord通知
+# グラブル公式NEWS → Discord通知
 
-グラブル公式サイトのNEWSを30分ごとに確認し、対象キーワードを含む新着記事をDiscordへ通知します。
+グランブルーファンタジー公式NEWSを30分ごとに確認し、キーワードに合う新着記事だけをDiscordへ通知します。
 
-## 通知対象（初期設定）
+## 最初の設定（GitHubのWeb画面だけでできます）
 
-- イベント
-- 古戦場
-- ドレッドバラージュ
-- コラボ
-- キャンペーン
-- メンテナンス
-- アップデート
-- 生放送
-- 「これからのグランブルーファンタジー」
+1. このZIPをMacでダブルクリックして解凍します。
+2. GitHubで空のリポジトリを作ります（Private推奨）。
+3. **Add file → Upload files** を開き、解凍したフォルダの「中身」をすべてアップロードします。
+4. アップロード一覧に `.github/workflows/notifier.yml` があることを確認して **Commit changes** を押します。
+5. **Settings → Secrets and variables → Actions → New repository secret** を開きます。
+6. Nameを `DISCORD_WEBHOOK_URL`、SecretをDiscordのWebhook URLにして保存します。
 
-ゲームへのログインやゲーム内部APIの利用はせず、公開されている公式NEWSだけを監視します。
+> `.github` はMacでは隠しフォルダです。Finderで見えない場合は `command + shift + .` で表示できます。ZIPには確実に収録されています。
 
-## 導入手順
+## テスト通知
 
-### 1. GitHubへアップロード
+1. GitHubの **Actions** タブを開きます。
+2. **Granblue Discord Notifier** を選びます。
+3. **Run workflow** を押します。`test_notification` はチェックしたまま実行します。
+4. Discordに「テストに成功しました」と届けば設定完了です。
 
-このフォルダを新しいGitHubリポジトリへアップロードします。公開・非公開のどちらでも動きます。
+手動テストは既読データを変更しません。通常のNEWS確認を手動実行したい場合だけ、チェックを外して実行してください。
 
-### 2. Discord Webhookを作る
+## 動作仕様
 
-1. 通知したいDiscordチャンネルを開く
-2. `チャンネルの編集` → `連携サービス` → `ウェブフック`
-3. `新しいウェブフック` を作成
-4. `ウェブフックURLをコピー`
+- 毎時7分と37分（約30分ごと）に実行
+- 初回の通常実行は現在の記事を既読登録するだけで、過去記事を大量通知しない
+- `data/seen.json` に記事IDを保存して重複通知を防止
+- 通知成功後だけ既読データを更新
+- キーワードに該当しない新着も既読にし、設定変更時の大量通知を防止
+- 同時実行を抑止
 
-Webhook URLは他人に見せないでください。
+GitHub Actionsの定時実行は混雑により数分以上遅れる場合があります。
 
-### 3. GitHub Secretへ登録
+## キーワードを変更する
 
-GitHubリポジトリで次を開きます。
+初期値は次のとおりです。
 
-`Settings` → `Secrets and variables` → `Actions` → `New repository secret`
+`イベント,キャンペーン,コラボ,フェス,古戦場,ブレイブグラウンド,四象降臨,撃滅戦,復刻`
 
-| Name | Secret |
-|---|---|
-| `DISCORD_WEBHOOK_URL` | コピーしたDiscord Webhook URL |
+変更する場合は **Settings → Secrets and variables → Actions → Variables → New repository variable** で、Nameを `KEYWORDS`、Valueをカンマ区切りの語句にします。空の変数は初期値として扱われます。すべての記事を通知したい場合は `src/notifier.py` の `DEFAULT_KEYWORDS` を空文字にしてください。
 
-### 4. 初回起動
+## 困ったとき
 
-`Actions` → `Granblue Discord Notifier` → `Run workflow`
+- Actionsにワークフローが出ない: リポジトリのCode画面で `.github/workflows/notifier.yml` が存在するか確認
+- Webhookエラー: Secret名が正確に `DISCORD_WEBHOOK_URL` か、URLが有効か確認
+- 既読保存時に403: **Settings → Actions → General → Workflow permissions** を `Read and write permissions` に変更
+- 通知されない: Actionsの実行ログと、キーワード設定を確認
 
-初回は現在掲載中の記事を記録するだけで、過去記事は通知しません。
-
-### 5. テスト通知
-
-もう一度 `Run workflow` を押し、`Discordへテスト通知を送る` にチェックして実行します。
-
-## 通知対象を変える
-
-GitHubリポジトリで以下を開きます。
-
-`Settings` → `Secrets and variables` → `Actions` → `Variables` → `New repository variable`
-
-### KEYWORDS
-
-カンマ区切りで指定します。
-
-```text
-イベント,古戦場,コラボ,キャンペーン,メンテナンス
-```
-
-### EXCLUDE_KEYWORDS
-
-通知したくない語句をカンマ区切りで指定します。
-
-```text
-キャラクターソング,グッズ
-```
-
-### NOTIFY_ALL
-
-すべての新着NEWSを通知する場合は、値を `true` にします。
-
-## 確認間隔を変える
-
-`.github/workflows/notifier.yml` のcronを変更します。現在は30分ごとです。
-
-```yaml
-- cron: "0,30 * * * *"
-```
-
-GitHub Actionsのスケジュールは混雑により数分以上遅れる場合があります。
-
-## ローカルでテストする
-
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-DISCORD_WEBHOOK_URL="Webhook URL" SEND_TEST=true python src/notifier.py
-```
-
-## 仕組み
-
-1. 公式NEWS一覧を取得
-2. 記事URL・タイトル・日付・カテゴリを抽出
-3. `data/state.json` と比較
-4. 未確認かつキーワードに合う記事をDiscordへ投稿
-5. 確認済みURLをGitHubへ自動保存
-
-## 注意
-
-- 公式サイトのHTML構造が大きく変わると、抽出処理の修正が必要になる場合があります。
-- Webhook URLをソースコードや公開投稿へ直接書かないでください。
-- GitHub Actionsを無効にすると通知も止まります。
+公式NEWS: https://granbluefantasy.com/ja/news/
