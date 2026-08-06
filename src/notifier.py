@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 NEWS_URL = "https://granbluefantasy.com/ja/news/"
 NEWS_API_URL = "https://granbluefantasy.com/rcms-api/1/news"
 STATE_PATH = Path("data/seen.json")
-DEFAULT_KEYWORDS = "イベント,キャンペーン,コラボ,フェス,古戦場,ブレイブグラウンド,四象降臨,撃滅戦,復刻"
+DEFAULT_KEYWORDS = ""
 HEADERS = {"User-Agent": "granblue-news-discord-notifier/2.0 (+GitHub Actions)"}
 
 
