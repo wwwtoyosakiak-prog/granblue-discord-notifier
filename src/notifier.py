@@ -77,7 +77,7 @@ def parse_api_articles(payload: dict) -> list[Article]:
         category = next((labels[x] for x in slugs if x in labels), "")
         found.append(Article(
             id=f"p:{topic_id}", title=title,
-            url=f"https://granbluefantasy.com/ja/news/p{topic_id}/",
+            url=f"https://granbluefantasy.com/ja/news/{topic_id}/",
             date=str(item.get("ymd", "")), category=category,
         ))
     return found
