@@ -219,6 +219,49 @@ def notify_due_reminders(webhook: str, schedule: dict, now: datetime | None = No
     return count
 
 
+def daily_agenda_events(schedule: dict, now: datetime | None = None) -> list[tuple[dict, str]]:
+    now = (now or datetime.now(JST)).astimezone(JST)
+    today = now.date()
+    result: list[tuple[dict, str]] = []
+    for event in schedule.get("events", {}).values():
+        start = datetime.fromisoformat(event["start"]).astimezone(JST)
+        end = datetime.fromisoformat(event["end"]).astimezone(JST)
+        if start.date() <= today <= end.date():
+            notes = []
+            if start.date() == today:
+                notes.append(f"開始 {start:%H:%M}")
+            if end.date() == today:
+                notes.append(f"終了 {end:%H:%M}")
+            if not notes:
+                notes.append(f"開催中（終了 {end:%m/%d %H:%M}）")
+            result.append((event, "・".join(notes)))
+    result.sort(key=lambda item: item[0]["end"])
+    return result
+
+
+def send_daily_agenda(webhook: str, schedule: dict, now: datetime | None = None) -> bool:
+    now = (now or datetime.now(JST)).astimezone(JST)
+    date_key = now.date().isoformat()
+    if schedule.get("daily_sent") == date_key:
+        return False
+    events = daily_agenda_events(schedule, now)
+    if events:
+        lines = [f"• [{event['title'][:80]}]({event['url']}) — {note}" for event, note in events]
+        description = "\n".join(lines)[:4096]
+    else:
+        description = "本日開催中の予定は登録されていません。"
+    payload = {"embeds": [{
+        "title": f"📅 {now:%Y年%m月%d日} 今日のグラブル予定",
+        "description": description,
+        "color": 0x10B981,
+        "footer": {"text": "公式NEWSから自動作成 / 時刻はJST"},
+    }]}
+    response = requests.post(webhook, json=payload, timeout=30)
+    response.raise_for_status()
+    schedule["daily_sent"] = date_key
+    return True
+
+
 def send_discord(webhook: str, article: Article | None = None, test: bool = False) -> None:
     if test:
         payload = {"content": "✅ グラブル公式NEWS通知のテストに成功しました。"}
@@ -250,6 +293,9 @@ def main() -> int:
     schedule = load_schedule()
     update_schedule(schedule, articles)
     reminders = notify_due_reminders(webhook, schedule) if schedule_exists else 0
+    agenda_sent = False
+    if os.getenv("DAILY_AGENDA", "false").lower() == "true":
+        agenda_sent = send_daily_agenda(webhook, schedule)
     save_schedule(schedule)
     current = {article.id for article in articles}
     if not seen:
@@ -263,7 +309,7 @@ def main() -> int:
         print(f"通知: {article.title}")
     # キーワード非該当も既読にし、後から設定変更した際の大量通知を防ぐ。
     save_seen(seen | current)
-    print(f"新着 {len(current - seen)}件、NEWS通知 {len(candidates)}件、予定通知 {reminders}件")
+    print(f"新着 {len(current - seen)}件、NEWS通知 {len(candidates)}件、予定通知 {reminders}件、朝予定表 {int(agenda_sent)}件")
     return 0
 
 
