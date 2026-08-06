@@ -5,9 +5,11 @@ import json
 import os
 import re
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urljoin, urlparse
+from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
@@ -15,6 +17,8 @@ from bs4 import BeautifulSoup
 NEWS_URL = "https://granbluefantasy.com/ja/news/"
 NEWS_API_URL = "https://granbluefantasy.com/rcms-api/1/news"
 STATE_PATH = Path("data/seen.json")
+SCHEDULE_PATH = Path("data/schedule.json")
+JST = ZoneInfo("Asia/Tokyo")
 DEFAULT_KEYWORDS = ""
 HEADERS = {"User-Agent": "granblue-news-discord-notifier/2.0 (+GitHub Actions)"}
 
@@ -26,6 +30,7 @@ class Article:
     url: str
     date: str = ""
     category: str = ""
+    content: str = ""
 
 
 def article_id(url: str) -> str:
@@ -79,6 +84,7 @@ def parse_api_articles(payload: dict) -> list[Article]:
             id=f"p:{topic_id}", title=title,
             url=f"https://granbluefantasy.com/ja/news/{topic_id}/",
             date=str(item.get("ymd", "")), category=category,
+            content=BeautifulSoup(str(item.get("content", "")), "html.parser").get_text(" ", strip=True),
         ))
     return found
 
@@ -125,6 +131,94 @@ def save_seen(ids: set[str], path: Path = STATE_PATH) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+PERIOD_RE = re.compile(
+    r"(?:(?P<sy>20\d{2})年)?(?P<sm>\d{1,2})月(?P<sd>\d{1,2})日"
+    r"(?:\([^)]*\))?\s*(?P<sh>\d{1,2}):(?P<si>\d{2})\s*[～〜~]\s*"
+    r"(?:(?P<ey>20\d{2})年)?(?P<em>\d{1,2})月(?P<ed>\d{1,2})日"
+    r"(?:\([^)]*\))?\s*(?P<eh>\d{1,2}):(?P<ei>\d{2})"
+)
+
+
+def extract_periods(article: Article) -> list[tuple[datetime, datetime]]:
+    base_year = int(article.date[:4]) if re.match(r"20\d{2}", article.date) else datetime.now(JST).year
+    periods: list[tuple[datetime, datetime]] = []
+    for match in PERIOD_RE.finditer(article.content):
+        values = match.groupdict()
+        start_year = int(values["sy"] or base_year)
+        end_year = int(values["ey"] or start_year)
+        start = datetime(start_year, int(values["sm"]), int(values["sd"]), int(values["sh"]), int(values["si"]), tzinfo=JST)
+        end = datetime(end_year, int(values["em"]), int(values["ed"]), int(values["eh"]), int(values["ei"]), tzinfo=JST)
+        if end < start and not values["ey"]:
+            end = end.replace(year=end.year + 1)
+        periods.append((start, end))
+    return periods
+
+
+def load_schedule(path: Path = SCHEDULE_PATH) -> dict:
+    if not path.exists():
+        return {"events": {}}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value.get("events"), dict) else {"events": {}}
+    except (json.JSONDecodeError, OSError, AttributeError):
+        raise RuntimeError(f"スケジュールデータ {path} を読み込めません")
+
+
+def save_schedule(schedule: dict, path: Path = SCHEDULE_PATH) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(schedule, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def update_schedule(schedule: dict, articles: list[Article]) -> None:
+    events = schedule.setdefault("events", {})
+    for article in articles:
+        # 記事内の細かな販売・交換期限による通知過多を避け、主期間（最初の期間）だけ登録する。
+        for index, (start, end) in enumerate(extract_periods(article)[:1]):
+            event_id = f"{article.id}:{index}"
+            previous = events.get(event_id, {})
+            events[event_id] = {
+                "title": article.title,
+                "url": article.url,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "notified": previous.get("notified", []),
+            }
+
+
+def send_reminder(webhook: str, event: dict, label: str) -> None:
+    start = datetime.fromisoformat(event["start"]).astimezone(JST)
+    end = datetime.fromisoformat(event["end"]).astimezone(JST)
+    payload = {"embeds": [{
+        "title": f"⏰ {label}: {event['title']}"[:256],
+        "url": event["url"],
+        "description": f"開始: {start:%Y/%m/%d %H:%M} JST\n終了: {end:%Y/%m/%d %H:%M} JST",
+        "color": 0xF59E0B,
+        "footer": {"text": "グラブル イベントスケジュール"},
+    }]}
+    response = requests.post(webhook, json=payload, timeout=30)
+    response.raise_for_status()
+
+
+def notify_due_reminders(webhook: str, schedule: dict, now: datetime | None = None) -> int:
+    now = (now or datetime.now(JST)).astimezone(JST)
+    count = 0
+    for event in schedule.get("events", {}).values():
+        start = datetime.fromisoformat(event["start"]).astimezone(JST)
+        end = datetime.fromisoformat(event["end"]).astimezone(JST)
+        reminders = [
+            ("start_30m", "開始30分前", start - timedelta(minutes=30)),
+            ("end_24h", "終了24時間前", end - timedelta(hours=24)),
+            ("end_1h", "終了1時間前", end - timedelta(hours=1)),
+        ]
+        notified = event.setdefault("notified", [])
+        for key, label, trigger in reminders:
+            if key not in notified and timedelta(0) <= now - trigger <= timedelta(hours=2):
+                send_reminder(webhook, event, label)
+                notified.append(key)
+                count += 1
+    return count
+
+
 def send_discord(webhook: str, article: Article | None = None, test: bool = False) -> None:
     if test:
         payload = {"content": "✅ グラブル公式NEWS通知のテストに成功しました。"}
@@ -152,10 +246,15 @@ def main() -> int:
 
     articles = fetch_articles()
     seen = load_seen()
+    schedule_exists = SCHEDULE_PATH.exists()
+    schedule = load_schedule()
+    update_schedule(schedule, articles)
+    reminders = notify_due_reminders(webhook, schedule) if schedule_exists else 0
+    save_schedule(schedule)
     current = {article.id for article in articles}
     if not seen:
         save_seen(current)
-        print(f"初回実行: {len(current)}件を既読として登録しました（通知なし）")
+        print(f"初回実行: {len(current)}件を既読、イベント日程を登録しました（通知なし）")
         return 0
 
     candidates = [a for a in reversed(articles) if a.id not in seen and matches(a, keywords())]
@@ -164,7 +263,7 @@ def main() -> int:
         print(f"通知: {article.title}")
     # キーワード非該当も既読にし、後から設定変更した際の大量通知を防ぐ。
     save_seen(seen | current)
-    print(f"新着 {len(current - seen)}件、通知 {len(candidates)}件")
+    print(f"新着 {len(current - seen)}件、NEWS通知 {len(candidates)}件、予定通知 {reminders}件")
     return 0
 
 
