@@ -1,0 +1,66 @@
+name: Granblue Discord Notifier
+
+on:
+  schedule:
+    # 30分ごとのNEWS確認
+    - cron: '7,37 * * * *'
+
+    # 毎朝6:00 JST
+    # GitHub ActionsはUTCなので21:00 UTC = 翌日6:00 JST
+    - cron: '0 21 * * *'
+
+  workflow_dispatch:
+    inputs:
+      test_notification:
+        description: 'Discordへテスト通知を送る'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: granblue-discord-notifier
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run notifier
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          KEYWORDS: ${{ vars.KEYWORDS }}
+          TEST_NOTIFICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.test_notification && 'true' || 'false' }}
+          DAILY_AGENDA: ${{ github.event_name == 'schedule' && github.event.schedule == '0 21 * * *' && 'true' || 'false' }}
+        run: python src/notifier.py
+
+      - name: Save notification state
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.test_notification }}
+        run: |
+          if git diff --quiet -- data/seen.json data/schedule.json; then
+            echo "No state changes"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/seen.json data/schedule.json
+          git commit -m "chore: update seen Granblue NEWS [skip ci]"
+          git push
