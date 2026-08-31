@@ -32,7 +32,9 @@
       "url": "https://granbluefantasy.com/ja/news/9744/",
       "start": "2026-07-31T17:00:00+09:00",
       "end": "2026-09-01T04:59:00+09:00",
-      "notified": []
+      "notified": [
+        "end_1h"
+      ]
     },
     "p:9741:0": {
       "title": "イベント「フォックステイル・サマー」開催のお知らせ",
@@ -103,7 +105,8 @@
       "start": "2026-08-16T05:00:00+09:00",
       "end": "2026-09-01T04:59:00+09:00",
       "notified": [
-        "start_30m"
+        "start_30m",
+        "end_1h"
       ]
     },
     "p:9751:0": {
@@ -112,7 +115,8 @@
       "start": "2026-08-16T05:00:00+09:00",
       "end": "2026-09-01T04:59:00+09:00",
       "notified": [
-        "start_30m"
+        "start_30m",
+        "end_1h"
       ]
     },
     "p:9752:0": {
@@ -154,14 +158,18 @@
       "url": "https://granbluefantasy.com/ja/news/9763/",
       "start": "2026-09-01T05:00:00+09:00",
       "end": "2026-09-24T04:59:00+09:00",
-      "notified": []
+      "notified": [
+        "start_30m"
+      ]
     },
     "p:9762:0": {
       "title": "Half Anniversaryキャンペーン第1弾開催のお知らせ",
       "url": "https://granbluefantasy.com/ja/news/9762/",
       "start": "2026-09-01T05:00:00+09:00",
       "end": "2026-09-13T04:59:00+09:00",
-      "notified": []
+      "notified": [
+        "start_30m"
+      ]
     }
   },
   "daily_sent": "2026-08-31"
