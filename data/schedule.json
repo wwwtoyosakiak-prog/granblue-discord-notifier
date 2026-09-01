@@ -170,6 +170,15 @@
       "notified": [
         "start_30m"
       ]
+    },
+    "p:9764:0": {
+      "title": "「期間限定育成パッケージ」販売のお知らせ",
+      "url": "https://granbluefantasy.com/ja/news/9764/",
+      "start": "2026-09-01T19:00:00+09:00",
+      "end": "2026-09-24T18:59:00+09:00",
+      "notified": [
+        "start_30m"
+      ]
     }
   },
   "daily_sent": "2026-09-01"
