@@ -207,7 +207,9 @@
       "url": "https://granbluefantasy.com/ja/news/9770/",
       "start": "2026-09-16T12:00:00+09:00",
       "end": "2026-09-19T18:59:00+09:00",
-      "notified": []
+      "notified": [
+        "end_24h"
+      ]
     }
   },
   "daily_sent": "2026-09-18"
