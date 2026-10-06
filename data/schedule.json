@@ -237,7 +237,9 @@
       "url": "https://granbluefantasy.com/ja/news/9777/",
       "start": "2026-10-07T05:00:00+09:00",
       "end": "2026-10-21T04:59:00+09:00",
-      "notified": []
+      "notified": [
+        "start_30m"
+      ]
     },
     "p:9776:0": {
       "title": "「スペシャルセレクトパッケージ」販売のお知らせ",
