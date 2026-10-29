@@ -277,6 +277,15 @@
       "url": "https://granbluefantasy.com/ja/news/9786/",
       "start": "2026-10-29T19:00:00+09:00",
       "end": "2026-11-06T20:59:00+09:00",
+      "notified": [
+        "start_30m"
+      ]
+    },
+    "p:9788:0": {
+      "title": "レジェンドフェス開催のお知らせ",
+      "url": "https://granbluefantasy.com/ja/news/9788/",
+      "start": "2026-10-29T12:00:00+09:00",
+      "end": "2026-11-04T18:59:00+09:00",
       "notified": []
     }
   },
